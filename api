@@ -1,0 +1,37 @@
+// api.js
+import io from 'socket.io-client';
+
+const socket = io('your_server_url');
+
+export const api = {
+  // Connect to friend
+  connectWithFriend: (userId, friendId) => {
+    socket.emit('join', { userId, friendId });
+  },
+
+  // Start a session
+  startSession: (userId, friendId, task) => {
+    socket.emit('startSession', { userId, friendId, task });
+  },
+
+  // Acknowledge a session
+  acknowledgeSession: (sessionId) => {
+    socket.emit('acknowledgeSession', { sessionId });
+  },
+
+  // Get session history
+  getSessions: async (userId) => {
+    const response = await fetch(`/api/sessions/${userId}`);
+    return response.json();
+  },
+
+  // Listen for friend starting session
+  onFriendStartSession: (callback) => {
+    socket.on('friendStartedSession', callback);
+  },
+
+  // Listen for session acknowledgments
+  onSessionAcknowledged: (callback) => {
+    socket.on('sessionAcknowledged', callback);
+  }
+};
