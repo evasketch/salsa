@@ -1,0 +1,71 @@
+// server.js
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const mongoose = require('mongoose');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// MongoDB Schema
+const sessionSchema = new mongoose.Schema({
+  userId: String,
+  friendId: String,
+  startTime: Date,
+  endTime: Date,
+  task: String,
+  acknowledged: Boolean
+});
+
+const Session = mongoose.model('Session', sessionSchema);
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  // Handle user joining
+  socket.on('join', ({ userId, friendId }) => {
+    socket.join(`room-${userId}-${friendId}`);
+  });
+
+  // Handle starting a session
+  socket.on('startSession', async ({ userId, friendId, task }) => {
+    const session = new Session({
+      userId,
+      friendId,
+      startTime: new Date(),
+      task,
+      acknowledged: false
+    });
+    await session.save();
+
+    // Notify friend
+    io.to(`room-${friendId}-${userId}`).emit('friendStartedSession', {
+      userId,
+      task
+    });
+  });
+
+  // Handle session acknowledgment
+  socket.on('acknowledgeSession', async ({ sessionId }) => {
+    await Session.findByIdAndUpdate(sessionId, { acknowledged: true });
+    // Notify original user of acknowledgment
+    const session = await Session.findById(sessionId);
+    io.to(`room-${session.userId}-${session.friendId}`).emit('sessionAcknowledged', {
+      sessionId
+    });
+  });
+});
+
+// API Routes
+app.get('/api/sessions/:userId', async (req, res) => {
+  const sessions = await Session.find({
+    $or: [
+      { userId: req.params.userId },
+      { friendId: req.params.userId }
+    ]
+  }).sort('-startTime');
+  res.json(sessions);
+});
+
+mongoose.connect('your_mongodb_uri');
+server.listen(3000);
